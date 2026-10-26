@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Support\Str;
-
 return [
 
     /*
@@ -127,10 +125,8 @@ return [
     |
     */
 
-    'cookie' => env(
-        'SESSION_COOKIE',
-        Str::slug((string) env('APP_NAME', 'laravel')).'-session'
-    ),
+    // Nombre fijo, el mismo que documenta el contrato OpenAPI (securitySchemes).
+    'cookie' => env('SESSION_COOKIE', 'sabitech_session'),
 
     /*
     |--------------------------------------------------------------------------

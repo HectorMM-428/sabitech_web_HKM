@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\ApiErrorRenderer;
+use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -19,10 +20,18 @@ return Application::configure(basePath: dirname(__DIR__))
         // Detrás de Nginx (contenedor front): confiar en sus cabeceras X-Forwarded-*
         // para que Laravel sepa que la petición original llegó por HTTPS.
         $middleware->trustProxies(at: '*');
+
+        // Sanctum en modo SPA: las peticiones de nuestro frontend usan la cookie de
+        // sesión y la protección CSRF (AD-02).
+        $middleware->statefulApi();
+
+        $middleware->alias([
+            'role' => EnsureUserHasRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*') || $request->is('sanctum/*') || $request->expectsJson(),
         );
 
         // Formato de error único para toda la API.

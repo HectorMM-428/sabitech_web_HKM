@@ -11,6 +11,8 @@ export type TalkDetail = Schemas['TalkDetail'];
 export type Speaker = Schemas['Speaker'];
 export type Room = Schemas['Room'];
 export type PageMeta = Schemas['PageMeta'];
+export type User = Schemas['User'];
+export type UserRole = User['role'];
 export type ApiErrorBody = Schemas['Error'];
 export type ErrorCode = ApiErrorBody['error']['code'];
 

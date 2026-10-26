@@ -12,6 +12,9 @@ import type { ApiErrorBody } from './types';
 
 const BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? '/api/v1';
 
+/** Evento global: la API ha respondido 401 (sesión caducada o cerrada en otra pestaña). */
+export const UNAUTHENTICATED_EVENT = 'sabitech:unauthenticated';
+
 /** Código propio del cliente para fallos de red: nunca viene del servidor. */
 export const NETWORK_ERROR = 'NETWORK_ERROR';
 
@@ -75,6 +78,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const body: unknown = await response.json().catch(() => null);
 
   if (!response.ok) {
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent(UNAUTHENTICATED_EVENT, { detail: { path } }));
+    }
     const error = (body as ApiErrorBody | null)?.error;
     throw new ApiError(
       response.status,
@@ -85,4 +91,16 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   return body as T;
+}
+
+/**
+ * Pide a Sanctum la cookie XSRF-TOKEN. Se llama antes de iniciar sesión o registrarse;
+ * después el navegador la renueva sola.
+ */
+export async function ensureCsrfCookie(): Promise<void> {
+  try {
+    await fetch('/sanctum/csrf-cookie', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+  } catch {
+    throw new ApiError(0, NETWORK_ERROR, 'No se ha podido conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.');
+  }
 }

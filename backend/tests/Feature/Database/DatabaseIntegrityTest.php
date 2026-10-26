@@ -5,6 +5,7 @@ namespace Tests\Feature\Database;
 use App\Models\Reservation;
 use App\Models\Talk;
 use App\Models\User;
+use Illuminate\Database\Eloquent\MassAssignmentException;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -128,7 +129,16 @@ class DatabaseIntegrityTest extends TestCase
     #[Test]
     public function el_rol_no_se_asigna_en_masa(): void
     {
-        $user = User::create(['name' => 'Intruso', 'email' => 'x@example.test', 'password' => 'secreto-largo', 'role' => 'admin']);
+        // En desarrollo y pruebas el modo estricto lo convierte en error visible;
+        // en producción el atributo se descarta. En ambos casos nadie se asigna un rol.
+        $this->expectException(MassAssignmentException::class);
+        User::create(['name' => 'Intruso', 'email' => 'x@example.test', 'password' => 'secreto-largo', 'role' => 'admin']);
+    }
+
+    #[Test]
+    public function un_usuario_nuevo_es_asistente_por_defecto(): void
+    {
+        $user = User::create(['name' => 'Nueva', 'email' => 'nueva@example.test', 'password' => 'secreto-largo']);
 
         $this->assertSame('attendee', $user->fresh()->role->value);
     }

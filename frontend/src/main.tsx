@@ -7,6 +7,7 @@ import '@fontsource/inter/700.css';
 import '@fontsource/jetbrains-mono/400.css';
 import './styles/tokens.css';
 import './styles/global.css';
+import './styles/components.css';
 import './features/catalog/catalog.css';
 import { routes } from './routes';
 

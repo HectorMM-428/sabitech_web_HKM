@@ -70,8 +70,10 @@ class Talk extends Model
 
     public function availableSeats(): int
     {
-        $confirmed = $this->confirmed_reservations_count
-            ?? $this->reservations()->where('status', ReservationStatus::Confirmed->value)->count();
+        // Si la consulta ya trajo el recuento (withAvailableSeats), se usa; si no, se calcula.
+        $confirmed = array_key_exists('confirmed_reservations_count', $this->attributes)
+            ? (int) $this->attributes['confirmed_reservations_count']
+            : $this->reservations()->where('status', ReservationStatus::Confirmed->value)->count();
 
         return max(0, $this->capacity - $confirmed);
     }
