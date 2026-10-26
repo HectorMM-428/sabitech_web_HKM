@@ -1,7 +1,11 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AccessController;
+use App\Http\Controllers\Api\V1\Admin\ActivityController;
+use App\Http\Controllers\Api\V1\Admin\CatalogDataController;
 use App\Http\Controllers\Api\V1\Admin\NotificationController;
+use App\Http\Controllers\Api\V1\Admin\TalkController as AdminTalkController;
+use App\Http\Controllers\Api\V1\Admin\UserController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CredentialController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -60,6 +64,29 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
 
     // Panel de organización: solo administradores.
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('talks', [AdminTalkController::class, 'index'])->name('talks.index');                                         // A17
+        Route::post('talks', [AdminTalkController::class, 'store'])->name('talks.store');                                        // A18
+        Route::get('talks/{talk}', [AdminTalkController::class, 'show'])->whereNumber('talk')->name('talks.show');               // A17
+        Route::put('talks/{talk}', [AdminTalkController::class, 'update'])->whereNumber('talk')->name('talks.update');           // A19
+        Route::patch('talks/{talk}/status', [AdminTalkController::class, 'status'])->whereNumber('talk')->name('talks.status');  // A20
+
+        Route::get('speakers', [CatalogDataController::class, 'speakers'])->name('speakers.index');                                        // A21
+        Route::post('speakers', [CatalogDataController::class, 'storeSpeaker'])->name('speakers.store');
+        Route::put('speakers/{speaker}', [CatalogDataController::class, 'updateSpeaker'])->whereNumber('speaker')->name('speakers.update');
+        Route::delete('speakers/{speaker}', [CatalogDataController::class, 'destroySpeaker'])->whereNumber('speaker')->name('speakers.destroy');
+
+        Route::get('rooms', [CatalogDataController::class, 'rooms'])->name('rooms.index');                                                 // A22
+        Route::post('rooms', [CatalogDataController::class, 'storeRoom'])->name('rooms.store');
+        Route::put('rooms/{room}', [CatalogDataController::class, 'updateRoom'])->whereNumber('room')->name('rooms.update');
+        Route::delete('rooms/{room}', [CatalogDataController::class, 'destroyRoom'])->whereNumber('room')->name('rooms.destroy');
+
+        Route::get('reservations', [ActivityController::class, 'reservations'])->name('reservations.index'); // A23
+        Route::get('attendances', [ActivityController::class, 'attendances'])->name('attendances.index');    // A24
+        Route::get('stats', [ActivityController::class, 'stats'])->name('stats');                            // A28
+
+        Route::get('users', [UserController::class, 'index'])->name('users.index');                                         // A30
+        Route::patch('users/{user}/role', [UserController::class, 'role'])->whereNumber('user')->name('users.role');         // A27
+
         Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');                                              // A25
         Route::post('notifications/{notification}/retry', [NotificationController::class, 'retry'])->whereNumber('notification')->name('notifications.retry'); // A26
     });

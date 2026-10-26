@@ -49,6 +49,12 @@ class Talk extends Model
         return $this->hasMany(Reservation::class);
     }
 
+    /** @return HasMany<Attendance, $this> */
+    public function attendances(): HasMany
+    {
+        return $this->hasMany(Attendance::class);
+    }
+
     /** @param Builder<Talk> $query */
     public function scopePublished(Builder $query): void
     {

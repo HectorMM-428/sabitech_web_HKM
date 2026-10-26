@@ -7,6 +7,16 @@ import { RegisterPage } from './features/auth/RegisterPage';
 import { CatalogPage } from './features/catalog/CatalogPage';
 import { TalkDetailPage } from './features/catalog/TalkDetailPage';
 import { AccessHomePage } from './features/access/AccessHomePage';
+import { AdminLayout } from './features/admin/AdminLayout';
+import { AttendancesPage } from './features/admin/AttendancesPage';
+import { DashboardPage } from './features/admin/DashboardPage';
+import { NotificationsPage } from './features/admin/NotificationsPage';
+import { ReservationsAdminPage } from './features/admin/ReservationsAdminPage';
+import { RoomsPage } from './features/admin/RoomsPage';
+import { SpeakersPage } from './features/admin/SpeakersPage';
+import { TalkFormPage } from './features/admin/TalkFormPage';
+import { TalksAdminPage } from './features/admin/TalksAdminPage';
+import { UsersPage } from './features/admin/UsersPage';
 import { ScannerPage } from './features/access/ScannerPage';
 import { CredentialPage } from './features/credential/CredentialPage';
 import { MyReservationsPage } from './features/reservations/MyReservationsPage';
@@ -45,6 +55,27 @@ export const routes: RouteObject[] = [
             children: [
               { path: 'acceso', element: <AccessHomePage /> },
               { path: 'acceso/:talkId', element: <ScannerPage /> },
+            ],
+          },
+          {
+            element: <RequireRole roles={['admin']} />,
+            children: [
+              {
+                path: 'admin',
+                element: <AdminLayout />,
+                children: [
+                  { index: true, element: <DashboardPage /> },
+                  { path: 'charlas', element: <TalksAdminPage /> },
+                  { path: 'charlas/nueva', element: <TalkFormPage /> },
+                  { path: 'charlas/:talkId', element: <TalkFormPage key="edit" /> },
+                  { path: 'ponentes', element: <SpeakersPage /> },
+                  { path: 'salas', element: <RoomsPage /> },
+                  { path: 'reservas', element: <ReservationsAdminPage /> },
+                  { path: 'asistencias', element: <AttendancesPage /> },
+                  { path: 'correos', element: <NotificationsPage /> },
+                  { path: 'usuarios', element: <UsersPage /> },
+                ],
+              },
             ],
           },
         ],

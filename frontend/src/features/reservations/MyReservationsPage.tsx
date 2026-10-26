@@ -115,7 +115,8 @@ function ReservationCard({ reservation: r, onCancel, now }: { reservation: Reser
     <article className="reservation-card">
       <div className="reservation-card__main">
         <h3 className="reservation-card__title">
-          <Link to={`/charlas/${r.talk.id}`}>{r.talk.title}</Link>
+          {/* Una charla cancelada ya no está en el programa: sin enlace a una página que no existe. */}
+          {r.talk.status === 'cancelled' ? r.talk.title : <Link to={`/charlas/${r.talk.id}`}>{r.talk.title}</Link>}
         </h3>
         <p className="muted">
           {formatDay(r.talk.starts_at)} · <span className="mono">{formatTimeRange(r.talk.starts_at, r.talk.ends_at)}</span> · {r.talk.room.name}
@@ -127,6 +128,7 @@ function ReservationCard({ reservation: r, onCancel, now }: { reservation: Reser
           <ReservationBadge status={r.display_status} />
           {r.status === 'confirmed' ? <EmailBadge status={r.email_status} /> : null}
         </div>
+        {r.talk.status === 'cancelled' ? <p className="field__hint">La organización ha cancelado esta charla.</p> : null}
         {r.email_status === 'failed' && r.status === 'confirmed' ? (
           <p className="field__hint">Tu reserva es válida. La organización reenviará el correo de confirmación.</p>
         ) : null}

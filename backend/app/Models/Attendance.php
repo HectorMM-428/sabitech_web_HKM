@@ -27,6 +27,12 @@ class Attendance extends Model
         return $this->belongsTo(Reservation::class);
     }
 
+    /** @return BelongsTo<Talk, $this> */
+    public function talk(): BelongsTo
+    {
+        return $this->belongsTo(Talk::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function validator(): BelongsTo
     {

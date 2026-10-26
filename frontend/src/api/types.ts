@@ -2,7 +2,7 @@
  * Tipos de la API derivados del contrato docs/api/openapi.yaml.
  * schema.d.ts se genera con `npm run gen:api`; no se edita a mano.
  */
-import type { components } from './schema';
+import type { components, operations } from './schema';
 
 type Schemas = components['schemas'];
 
@@ -18,6 +18,14 @@ export type Credential = Schemas['Credential'];
 export type StaffTalk = Schemas['StaffTalk'];
 export type CheckInResult = Schemas['CheckInResult'];
 export type StaffReservationRow = Schemas['StaffReservationRow'];
+export type AdminReservationRow = Schemas['AdminReservationRow'];
+export type Attendance = Schemas['Attendance'];
+export type Notification = Schemas['Notification'];
+export type TalkStatus = Schemas['TalkStatus'];
+export type TalkInput = Schemas['TalkInput'];
+export type SpeakerInput = Schemas['SpeakerInput'];
+export type RoomInput = Schemas['RoomInput'];
+export type AdminStats = operations['adminStats']['responses']['200']['content']['application/json']['data'];
 export type UserRole = User['role'];
 export type ApiErrorBody = Schemas['Error'];
 export type ErrorCode = ApiErrorBody['error']['code'];

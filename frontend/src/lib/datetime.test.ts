@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { eventDateKey, formatDay, formatTime, formatTimeRange } from './datetime';
+import { eventDateKey, formatDay, formatTime, formatTimeRange, fromEventLocalInput, toEventLocalInput } from './datetime';
 
 describe('fechas en la zona de las jornadas (Europe/Madrid)', () => {
   it('muestra la hora de Madrid aunque la API envíe UTC', () => {
@@ -20,5 +20,15 @@ describe('fechas en la zona de las jornadas (Europe/Madrid)', () => {
   it('calcula la fecha del evento en Madrid, no en UTC', () => {
     // 23:30 UTC del 23 = 00:30 del 24 en Madrid
     expect(eventDateKey('2027-02-23T23:30:00Z')).toBe('2027-02-24');
+  });
+});
+
+describe('Hora de Madrid en formularios', () => {
+  it('convierte en ambos sentidos en invierno (UTC+1) y en verano (UTC+2)', () => {
+    expect(fromEventLocalInput('2027-02-24T10:00')).toBe('2027-02-24T09:00:00Z');
+    expect(fromEventLocalInput('2027-06-10T10:00')).toBe('2027-06-10T08:00:00Z');
+    expect(toEventLocalInput('2027-02-24T09:00:00Z')).toBe('2027-02-24T10:00');
+    expect(toEventLocalInput('2027-06-10T10:00:00+02:00')).toBe('2027-06-10T10:00');
+    expect(fromEventLocalInput('')).toBe('');
   });
 });

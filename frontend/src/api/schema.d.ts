@@ -302,7 +302,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** A17 · Ver una charla en cualquier estado (para editarla) */
+        get: operations["adminShowTalk"];
         /** A19 · Editar charla */
         put: operations["adminUpdateTalk"];
         post?: never;
@@ -325,7 +326,12 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** A20 · Publicar, despublicar o cancelar charla */
+        /**
+         * A20 · Publicar, despublicar o cancelar charla
+         * @description draft → published · published → draft (solo sin reservas confirmadas) ·
+         *     draft|published → cancelled (cancela también sus reservas confirmadas).
+         *     Una charla cancelada o ya empezada no cambia de estado (422 en el campo status).
+         */
         patch: operations["adminChangeTalkStatus"];
         trace?: never;
     };
@@ -473,6 +479,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A30 · Buscar usuarios */
+        get: operations["adminListUsers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users/{userId}/role": {
         parameters: {
             query?: never;
@@ -486,7 +509,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** A27 · Cambiar el rol de un usuario */
+        /**
+         * A27 · Cambiar el rol de un usuario
+         * @description Nadie puede cambiar su propio rol (422), así siempre queda al menos un admin.
+         */
         patch: operations["adminChangeRole"];
         trace?: never;
     };
@@ -1476,6 +1502,33 @@ export interface operations {
             422: components["responses"]["ValidationError"];
         };
     };
+    adminShowTalk: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                talkId: components["parameters"]["TalkId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Charla con ocupación. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TalkDetail"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     adminUpdateTalk: {
         parameters: {
             query?: never;
@@ -1505,6 +1558,24 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            /** @description El aforo quedaría por debajo de las reservas confirmadas (RN-12). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": {
+                     *         "code": "AFORO_BELOW_CONFIRMED",
+                     *         "message": "El aforo no puede ser menor que las 3 reservas confirmadas.",
+                     *         "fields": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             422: components["responses"]["ValidationError"];
         };
     };
@@ -1890,6 +1961,36 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+        };
+    };
+    adminListUsers: {
+        parameters: {
+            query?: {
+                /** @description Nombre o correo. */
+                q?: string;
+                role?: "attendee" | "staff" | "admin";
+                page?: components["parameters"]["Page"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usuarios paginados. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["User"][];
+                        meta: components["schemas"]["PageMeta"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
         };
     };
     adminChangeRole: {

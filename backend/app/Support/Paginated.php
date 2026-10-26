@@ -18,12 +18,21 @@ final class Paginated
     {
         return response()->json([
             'data' => $resource::collection($page->items())->resolve($request),
-            'meta' => [
-                'current_page' => $page->currentPage(),
-                'per_page' => $page->perPage(),
-                'total' => $page->total(),
-                'last_page' => $page->lastPage(),
-            ],
+            'meta' => self::meta($page),
         ]);
+    }
+
+    /**
+     * @param  LengthAwarePaginator<int, mixed>  $page
+     * @return array{current_page: int, per_page: int, total: int, last_page: int}
+     */
+    public static function meta(LengthAwarePaginator $page): array
+    {
+        return [
+            'current_page' => $page->currentPage(),
+            'per_page' => $page->perPage(),
+            'total' => $page->total(),
+            'last_page' => $page->lastPage(),
+        ];
     }
 }

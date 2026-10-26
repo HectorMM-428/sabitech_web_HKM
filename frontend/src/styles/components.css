@@ -681,3 +681,155 @@ select.field__input {
 .manual-results__name {
   font-weight: 600;
 }
+
+/* ---------- Panel de organización ---------- */
+
+.admin {
+  display: grid;
+  gap: var(--space-6);
+}
+
+@media (min-width: 900px) {
+  .admin {
+    grid-template-columns: 200px minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+.admin__content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.admin-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+@media (min-width: 900px) {
+  .admin-nav ul {
+    flex-direction: column;
+    position: sticky;
+    top: var(--space-4);
+  }
+}
+
+.admin-nav a {
+  display: flex;
+  align-items: center;
+  min-height: var(--touch-target);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.admin-nav a:hover {
+  background: var(--color-surface-2);
+}
+
+/* La sección activa se marca con fondo y con una barra, no solo con color. */
+.admin-nav a[aria-current="page"] {
+  background: var(--color-surface-2);
+  box-shadow: inset 3px 0 0 var(--color-link);
+  font-weight: 600;
+}
+
+.admin-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stat-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-4);
+}
+
+.stat {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+}
+
+.stat--alert {
+  border-color: var(--color-danger);
+}
+
+.stat__link,
+.stat > .stat__value {
+  color: inherit;
+  text-decoration: none;
+}
+
+.stat__link,
+.stat:not(:has(.stat__link)) {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4);
+}
+
+.stat__link:hover .stat__label {
+  text-decoration: underline;
+}
+
+.stat__value {
+  font-size: var(--text-3xl);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat__label {
+  color: var(--color-text-muted);
+}
+
+.stat--alert .stat__label > span {
+  color: var(--color-danger);
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.form-card--wide {
+  max-width: none;
+}
+
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+@media (min-width: 640px) {
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-link);
+  font: inherit;
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 24px;
+}

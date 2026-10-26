@@ -539,6 +539,25 @@ paths:
         '422': { $ref: '#/components/responses/ValidationError' }
 
   /admin/talks/{talkId}:
+    get:
+      operationId: adminShowTalk
+      summary: A17 · Ver una charla en cualquier estado (para editarla)
+      tags: [Administración]
+      parameters:
+        - $ref: '#/components/parameters/TalkId'
+      responses:
+        '200':
+          description: Charla con ocupación.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TalkDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
     put:
       operationId: adminUpdateTalk
       summary: A19 · Editar charla
@@ -563,12 +582,22 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: El aforo quedaría por debajo de las reservas confirmadas (RN-12).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: { code: AFORO_BELOW_CONFIRMED, message: El aforo no puede ser menor que las 3 reservas confirmadas., fields: null } }
         '422': { $ref: '#/components/responses/ValidationError' }
 
   /admin/talks/{talkId}/status:
     patch:
       operationId: adminChangeTalkStatus
       summary: A20 · Publicar, despublicar o cancelar charla
+      description: |
+        draft → published · published → draft (solo sin reservas confirmadas) ·
+        draft|published → cancelled (cancela también sus reservas confirmadas).
+        Una charla cancelada o ya empezada no cambia de estado (422 en el campo status).
       tags: [Administración]
       parameters:
         - $ref: '#/components/parameters/TalkId'
@@ -877,10 +906,41 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
               example: { error: { code: ALREADY_SENT, message: El correo ya se envió correctamente., fields: null } }
 
+  /admin/users:
+    get:
+      operationId: adminListUsers
+      summary: A30 · Buscar usuarios
+      tags: [Administración]
+      parameters:
+        - name: q
+          in: query
+          description: Nombre o correo.
+          schema: { type: string, maxLength: 100 }
+        - name: role
+          in: query
+          schema: { type: string, enum: [attendee, staff, admin] }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Usuarios paginados.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /admin/users/{userId}/role:
     patch:
       operationId: adminChangeRole
       summary: A27 · Cambiar el rol de un usuario
+      description: Nadie puede cambiar su propio rol (422), así siempre queda al menos un admin.
       tags: [Administración]
       parameters:
         - name: userId

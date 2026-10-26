@@ -135,6 +135,30 @@ describe('Mis reservas y cancelación (A08, A11)', () => {
     expect(within(history).queryByRole('button', { name: 'Cancelar reserva' })).not.toBeInTheDocument();
   });
 
+  it('si la organización cancela la charla, lo explica y no enlaza a una página que ya no existe', async () => {
+    mockApi(
+      {
+        'GET /api/v1/me/reservations': () =>
+          jsonResponse({
+            data: [
+              makeReservation({
+                status: 'cancelled',
+                display_status: 'cancelled',
+                cancelled_at: '2027-02-11T10:00:00+01:00',
+                talk: makeTalk({ title: 'Charla suspendida', status: 'cancelled', starts_at: '2099-02-24T10:00:00+01:00', ends_at: '2099-02-24T10:45:00+01:00' }),
+              }),
+            ],
+          }),
+      },
+      { user: attendee },
+    );
+    renderAt('/mis-reservas');
+
+    expect(await screen.findByText('La organización ha cancelado esta charla.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Charla suspendida' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Charla suspendida' })).not.toBeInTheDocument();
+  });
+
   it('t09: cancelar pide confirmación, llama a la API y recarga la lista', async () => {
     let cancelled = false;
     const fetchMock = mockApi(
