@@ -6,6 +6,9 @@ import { LoginPage } from './features/auth/LoginPage';
 import { RegisterPage } from './features/auth/RegisterPage';
 import { CatalogPage } from './features/catalog/CatalogPage';
 import { TalkDetailPage } from './features/catalog/TalkDetailPage';
+import { AccessHomePage } from './features/access/AccessHomePage';
+import { ScannerPage } from './features/access/ScannerPage';
+import { CredentialPage } from './features/credential/CredentialPage';
 import { MyReservationsPage } from './features/reservations/MyReservationsPage';
 import { ForbiddenPage } from './pages/ForbiddenPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -32,7 +35,17 @@ export const routes: RouteObject[] = [
         children: [
           {
             element: <RequireRole roles={['attendee']} />,
-            children: [{ path: 'mis-reservas', element: <MyReservationsPage /> }],
+            children: [
+              { path: 'mis-reservas', element: <MyReservationsPage /> },
+              { path: 'mis-reservas/:reservationId/acreditacion', element: <CredentialPage /> },
+            ],
+          },
+          {
+            element: <RequireRole roles={['staff', 'admin']} />,
+            children: [
+              { path: 'acceso', element: <AccessHomePage /> },
+              { path: 'acceso/:talkId', element: <ScannerPage /> },
+            ],
           },
         ],
       },

@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AccessController;
 use App\Http\Controllers\Api\V1\Admin\NotificationController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\CredentialController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\TalkController;
@@ -43,6 +45,17 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('me/reservations/{reservation}', [ReservationController::class, 'show'])->whereNumber('reservation')->name('reservations.show'); // A09
         Route::post('reservations', [ReservationController::class, 'store'])->name('reservations.store');                                  // A10
         Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->whereNumber('reservation')->name('reservations.cancel'); // A11
+
+        Route::get('reservations/{reservation}/credential', CredentialController::class)                                                     // A12
+            ->whereNumber('reservation')->middleware('throttle:credential')->withoutMiddleware('throttle:api')->name('reservations.credential');
+    });
+
+    // Control de acceso: personal de acceso y administración.
+    Route::middleware('role:staff,admin')->group(function () {
+        Route::get('staff/talks', [AccessController::class, 'talks'])->name('access.talks');                                                   // A13
+        Route::post('checkins', [AccessController::class, 'checkIn'])->name('access.checkin');                                                 // A14
+        Route::get('staff/talks/{talk}/reservations', [AccessController::class, 'search'])->whereNumber('talk')->name('access.search');        // A15
+        Route::post('checkins/manual', [AccessController::class, 'manual'])->name('access.manual');                                           // A16
     });
 
     // Panel de organización: solo administradores.
