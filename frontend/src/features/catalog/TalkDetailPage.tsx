@@ -6,6 +6,7 @@ import { EmptyState, ErrorState, LoadingBlocks } from '../../components/ui/State
 import { useApi } from '../../hooks/useApi';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { formatDay, formatTimeRange } from '../../lib/datetime';
+import { ReserveAction } from '../reservations/ReserveAction';
 import { Availability } from './Availability';
 
 /** Detalle de una charla publicada (A02). */
@@ -42,18 +43,20 @@ export function TalkDetailPage() {
           <ErrorState error={state.error} onRetry={reload} />
         ))}
 
-      {state.status === 'success' && <TalkDetail talk={state.data.data} />}
+      {state.status === 'success' && <TalkDetail talk={state.data.data} onChanged={reload} />}
     </div>
   );
 }
 
-function TalkDetail({ talk }: { talk: TalkDetailData }) {
+function TalkDetail({ talk, onChanged }: { talk: TalkDetailData; onChanged: () => void }) {
   return (
     <article className="talk-detail">
       <header className="talk-detail__header">
         <h1>{talk.title}</h1>
         <Availability available={talk.available_seats} capacity={talk.capacity} />
       </header>
+
+      <ReserveAction talk={talk} onChanged={onChanged} />
 
       <dl className="talk-detail__facts">
         <div>

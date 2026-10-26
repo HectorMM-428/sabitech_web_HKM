@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HealthController;
+use App\Http\Controllers\Api\V1\ReservationController;
 use App\Http\Controllers\Api\V1\TalkController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,4 +35,12 @@ Route::post('auth/register', [AuthController::class, 'register'])->middleware('t
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('auth/logout', [AuthController::class, 'logout'])->name('auth.logout'); // A06
     Route::get('auth/me', [AuthController::class, 'me'])->name('auth.me');              // A07
+
+    // Reservas: solo asistentes. El resto de perfiles no reserva plazas.
+    Route::middleware('role:attendee')->group(function () {
+        Route::get('me/reservations', [ReservationController::class, 'index'])->name('reservations.mine');                                   // A08
+        Route::get('me/reservations/{reservation}', [ReservationController::class, 'show'])->whereNumber('reservation')->name('reservations.show'); // A09
+        Route::post('reservations', [ReservationController::class, 'store'])->name('reservations.store');                                  // A10
+        Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->whereNumber('reservation')->name('reservations.cancel'); // A11
+    });
 });
