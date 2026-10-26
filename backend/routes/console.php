@@ -1,8 +1,11 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+/*
+ * Tareas programadas. Las ejecuta el proceso `scheduler` del contenedor back
+ * (php artisan schedule:work, ver backend/docker/supervisord.conf).
+ */
+
+// Correos que quedaron en «enviando» porque el proceso se cayó → «fallido», para poder reintentarlos.
+Schedule::command('sabitech:release-stuck-notifications')->everyFiveMinutes()->withoutOverlapping();

@@ -2,10 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\NotificationStatus;
 use App\Enums\ReservationStatus;
 use App\Enums\TalkStatus;
 use App\Events\ReservationConfirmed;
 use App\Exceptions\BusinessRuleException;
+use App\Models\EmailNotification;
 use App\Models\Reservation;
 use App\Models\Talk;
 use App\Models\User;
@@ -44,7 +46,7 @@ class ReservationService
                 $this->assertNoOverlap($user, $talk);
                 $this->assertHasSeats($talk);
 
-                return Reservation::create([
+                $reservation = Reservation::create([
                     'reference' => $this->uniqueReference(),
                     'user_id' => $user->id,
                     'talk_id' => $talk->id,
@@ -52,6 +54,18 @@ class ReservationService
                     'confirmed_at' => now(),
                     'cancelled_at' => null,
                 ]);
+
+                // El registro del correo nace en la MISMA transacción que la reserva: nunca
+                // puede existir una reserva confirmada sin saber qué pasó con su correo (R14).
+                EmailNotification::create([
+                    'reservation_id' => $reservation->id,
+                    'type' => EmailNotification::TYPE_RESERVATION_CONFIRMED,
+                    'recipient' => $user->email,
+                    'status' => NotificationStatus::Pending,
+                    'attempts' => 0,
+                ]);
+
+                return $reservation;
             }, self::DEADLOCK_ATTEMPTS);
         } catch (QueryException $e) {
             // Segunda barrera: el índice único de la base de datos (reserva activa duplicada).
@@ -61,7 +75,8 @@ class ReservationService
             throw $e;
         }
 
-        // Fuera de la transacción: la reserva ya está guardada pase lo que pase después.
+        // Fuera de la transacción: la reserva ya está guardada. El envío del correo va a la
+        // cola; si falla, la reserva sigue siendo válida (RN-06).
         ReservationConfirmed::dispatch($reservation);
 
         return $reservation;

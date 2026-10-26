@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\Admin\NotificationController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\HealthController;
 use App\Http\Controllers\Api\V1\ReservationController;
@@ -42,5 +43,11 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::get('me/reservations/{reservation}', [ReservationController::class, 'show'])->whereNumber('reservation')->name('reservations.show'); // A09
         Route::post('reservations', [ReservationController::class, 'store'])->name('reservations.store');                                  // A10
         Route::post('reservations/{reservation}/cancel', [ReservationController::class, 'cancel'])->whereNumber('reservation')->name('reservations.cancel'); // A11
+    });
+
+    // Panel de organización: solo administradores.
+    Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');                                              // A25
+        Route::post('notifications/{notification}/retry', [NotificationController::class, 'retry'])->whereNumber('notification')->name('notifications.retry'); // A26
     });
 });
