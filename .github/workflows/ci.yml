@@ -1,0 +1,131 @@
+# SABITECH WEB · integración continua (R27, prueba T22)
+# Se ejecuta en cada push y pull request. Una rama solo entra en main con todo en verde.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend · pruebas contra MySQL 8.4
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root-ci-only
+          MYSQL_DATABASE: sabitech_test
+          MYSQL_USER: sabitech
+          MYSQL_PASSWORD: local-test-only
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot-ci-only --silent"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, intl, bcmath, zip
+          coverage: none
+
+      - name: Caché de Composer
+        uses: actions/cache@v6
+        with:
+          path: ~/.composer/cache
+          key: composer-${{ hashFiles('backend/composer.json', 'backend/composer.lock') }}
+
+      - name: Instalar dependencias
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Estilo de código (Pint, informativo)
+        run: vendor/bin/pint --test
+        continue-on-error: true
+
+      - name: Migraciones y datos de laboratorio desde cero
+        env:
+          DB_DATABASE: sabitech_test
+          DB_USERNAME: sabitech
+          DB_PASSWORD: local-test-only
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        run: php artisan migrate:fresh --seed --force
+
+      - name: Pruebas
+        run: php artisan test
+
+  frontend:
+    name: Frontend · lint, tipos, pruebas y build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  contract:
+    name: Contrato de API · OpenAPI válido y tipos al día
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+      - name: Validar openapi.yaml
+        run: npx -y @redocly/cli@latest lint docs/api/openapi.yaml
+      - name: Los tipos del frontend coinciden con el contrato
+        working-directory: frontend
+        run: |
+          npm run gen:api
+          git diff --exit-code src/api/schema.d.ts || (echo "::error::Ejecuta 'npm run gen:api' y sube src/api/schema.d.ts" && exit 1)
+
+  docker:
+    name: Imágenes Docker de producción
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - name: Construir back
+        run: docker build --target prod -t sabitech-back:ci backend
+      - name: Construir front
+        run: docker build --target prod -t sabitech-front:ci frontend
+      - name: Validar compose.yaml
+        run: |
+          cp .env.example .env
+          sed -i 's/^DB_PASSWORD=$/DB_PASSWORD=ci/; s/^DB_ROOT_PASSWORD=$/DB_ROOT_PASSWORD=ci/' .env
+          docker compose -f compose.yaml config --quiet
+
+  secrets:
+    name: Sin secretos en el repositorio
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,17 @@
+# Secretos y configuración local: NUNCA al repositorio
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Certificados locales (mkcert) y copias de seguridad con datos
+certs/
+backups/
+
+# Sistema y editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp

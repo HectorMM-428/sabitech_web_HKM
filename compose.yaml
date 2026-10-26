@@ -1,0 +1,92 @@
+# SABITECH WEB · Docker Compose (diseño, Fase 3)
+# Tres contenedores, decisión K-09:
+#   front · Nginx: sirve el build de React, termina HTTPS y pasa /api y /sanctum a back por FastCGI
+#   back  · PHP-FPM 8.4 + Laravel 13 + worker de cola (Supervisor)
+#   db    · MySQL 8.4 LTS con volumen persistente, sin puertos publicados
+#
+# Demo:        cp .env.example .env  →  rellenar secretos  →  docker compose -f compose.yaml up -d --build
+# Desarrollo:  docker compose up   (añade compose.override.yaml: código montado + Vite; Fase 4)
+# Los Dockerfile de backend/ y frontend/ se crean en la Fase 4.
+
+name: sabitech
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-sabitech}
+      MYSQL_USER: ${DB_USERNAME:-sabitech}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Define DB_PASSWORD en .env}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?Define DB_ROOT_PASSWORD en .env}
+      TZ: UTC
+    command:
+      - --default-time-zone=+00:00
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    networks: [internal]
+
+  back:
+    build:
+      context: ./backend
+      target: prod
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: "3306"
+      APP_TIMEZONE: UTC
+      QUEUE_CONNECTION: database
+      SESSION_DRIVER: database
+      SESSION_SECURE_COOKIE: "true"
+      SANCTUM_STATEFUL_DOMAINS: ${APP_DOMAIN:-sabitech.test}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - back-storage:/var/www/html/storage
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 9000) ? 0 : 1);"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 20s
+    networks: [internal]
+
+  front:
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        VITE_API_BASE_URL: /api/v1
+    restart: unless-stopped
+    environment:
+      SERVER_NAME: ${APP_DOMAIN:-sabitech.test}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      back:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  db-data:
+  back-storage:
+
+networks:
+  internal:

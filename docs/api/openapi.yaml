@@ -1,0 +1,1286 @@
+openapi: 3.1.0
+info:
+  title: SABITECH WEB API
+  version: 0.1.0-design
+  summary: API REST de reservas y control de asistencia de las jornadas SABITECH.
+  description: |
+    Contrato de diseño (Fase 3). Base URL: `/api/v1`.
+
+    **Autenticación:** Laravel Sanctum en modo SPA. El cliente llama primero a
+    `GET /sanctum/csrf-cookie`, después hace login y envía la cookie de sesión y la
+    cabecera `X-XSRF-TOKEN` en cada petición que modifica datos.
+
+    **Fechas:** ISO 8601 con desfase (`2027-02-24T10:00:00+01:00`). En base de datos se
+    guardan en UTC; la API las devuelve en Europe/Madrid.
+
+    **Errores:** todas las respuestas 4xx/5xx usan el esquema `Error`.
+  contact:
+    name: Sabitech (Karim Gómez, Héctor Molina, Michael Leguizamón)
+  license:
+    name: Uso académico
+    identifier: CC-BY-4.0
+servers:
+  - url: https://sabitech.test/api/v1
+    description: Demo local (Docker Compose, red local)
+  - url: https://localhost:8443/api/v1
+    description: Desarrollo
+tags:
+  - name: Catálogo
+    description: Consulta pública del programa.
+  - name: Autenticación
+    description: Registro, inicio y cierre de sesión.
+  - name: Reservas
+    description: Reservas del asistente autenticado.
+  - name: Acreditación
+    description: Token QR temporal.
+  - name: Acceso
+    description: Validación de asistencia por el personal de acceso.
+  - name: Administración
+    description: Panel de organización.
+  - name: Sistema
+    description: Salud del servicio.
+
+security:
+  - sessionCookie: []
+
+paths:
+  /talks:
+    get:
+      operationId: listTalks
+      summary: A01 · Listar charlas publicadas
+      tags: [Catálogo]
+      security: []
+      parameters:
+        - name: date
+          in: query
+          description: Día en Europe/Madrid (YYYY-MM-DD).
+          schema: { type: string, format: date }
+        - name: q
+          in: query
+          description: Texto en título, descripción o ponente.
+          schema: { type: string, maxLength: 100 }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Página de charlas con plazas disponibles reales.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TalkSummary' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /talks/{talkId}:
+    get:
+      operationId: getTalk
+      summary: A02 · Detalle de una charla publicada
+      tags: [Catálogo]
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/TalkId'
+      responses:
+        '200':
+          description: Detalle completo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TalkDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /auth/login:
+    post:
+      operationId: login
+      summary: A04 · Iniciar sesión
+      description: Límite de 5 intentos por minuto y combinación email + IP.
+      tags: [Autenticación]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, maxLength: 190 }
+                password: { type: string, minLength: 1, maxLength: 255 }
+            example: { email: lucia.ferrer@example.test, password: 'Demo-2026!' }
+      responses:
+        '200':
+          description: Sesión iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/register:
+    post:
+      operationId: register
+      summary: A05 · Registro de asistente
+      description: El rol es siempre `attendee`; cualquier campo `role` enviado se ignora.
+      tags: [Autenticación]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password, password_confirmation]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                email: { type: string, format: email, maxLength: 190 }
+                password: { type: string, minLength: 10, maxLength: 255 }
+                password_confirmation: { type: string }
+      responses:
+        '201':
+          description: Cuenta creada y sesión iniciada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: A06 · Cerrar sesión
+      tags: [Autenticación]
+      responses:
+        '204': { description: Sesión invalidada en el servidor. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /auth/me:
+    get:
+      operationId: me
+      summary: A07 · Usuario de la sesión
+      tags: [Autenticación]
+      responses:
+        '200':
+          description: Usuario autenticado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/reservations:
+    get:
+      operationId: listMyReservations
+      summary: A08 · Mis reservas
+      tags: [Reservas]
+      parameters:
+        - name: status
+          in: query
+          schema: { type: string, enum: [confirmed, cancelled] }
+      responses:
+        '200':
+          description: Solo reservas del usuario autenticado, más recientes primero.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Reservation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /me/reservations/{reservationId}:
+    get:
+      operationId: getMyReservation
+      summary: A09 · Detalle de una reserva propia
+      tags: [Reservas]
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      responses:
+        '200':
+          description: Reserva propia.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Reservation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /reservations:
+    post:
+      operationId: createReservation
+      summary: A10 · Reservar plaza
+      description: |
+        Transacción con bloqueo de la fila de la charla (`SELECT … FOR UPDATE`).
+        Reglas RN-01 a RN-05. Crea también la notificación `pending`; el correo se
+        encola tras el commit.
+      tags: [Reservas]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [talk_id]
+              properties:
+                talk_id: { type: integer, minimum: 1 }
+            example: { talk_id: 7 }
+      responses:
+        '201':
+          description: Reserva confirmada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Reservation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Una regla de negocio impide la reserva.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                full:
+                  value: { error: { code: TALK_FULL, message: La charla no tiene plazas disponibles., fields: null } }
+                duplicate:
+                  value: { error: { code: DUPLICATE, message: Ya tienes una reserva activa para esta charla., fields: null } }
+                started:
+                  value: { error: { code: TALK_STARTED, message: La charla ya ha comenzado., fields: null } }
+                overlap:
+                  value: { error: { code: OVERLAP, message: Tienes otra reserva en el mismo horario., fields: null } }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /reservations/{reservationId}/cancel:
+    post:
+      operationId: cancelReservation
+      summary: A11 · Cancelar reserva propia
+      tags: [Reservas]
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      responses:
+        '200':
+          description: Reserva cancelada; la plaza queda libre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Reservation' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: No se puede cancelar.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                cancelled:
+                  value: { error: { code: ALREADY_CANCELLED, message: La reserva ya estaba cancelada., fields: null } }
+                attended:
+                  value: { error: { code: ATTENDED, message: La asistencia ya está registrada., fields: null } }
+                started:
+                  value: { error: { code: TALK_STARTED, message: La charla ya ha comenzado., fields: null } }
+
+  /reservations/{reservationId}/credential:
+    get:
+      operationId: getCredential
+      summary: A12 · Token QR vigente
+      description: |
+        Devuelve un token firmado con `exp = iat + 30 s`. El cliente pide el siguiente
+        2 s antes de `expires_at`. Límite: 10 peticiones por minuto y usuario.
+      tags: [Acreditación]
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+      responses:
+        '200':
+          description: Token vigente.
+          headers:
+            Cache-Control:
+              schema: { type: string, const: no-store }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Credential' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: La reserva no puede mostrar acreditación ahora.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                notActive:
+                  value: { error: { code: NOT_ACTIVE, message: La reserva no está confirmada., fields: null } }
+                window:
+                  value: { error: { code: OUTSIDE_WINDOW, message: La acreditación se abre 60 minutos antes de la charla., fields: null } }
+                attended:
+                  value: { error: { code: ATTENDED, message: Tu asistencia ya está registrada., fields: null } }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /staff/talks:
+    get:
+      operationId: listStaffTalks
+      summary: A13 · Charlas que puede controlar el staff
+      tags: [Acceso]
+      parameters:
+        - name: date
+          in: query
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Charlas del día con contadores.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/StaffTalk' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /checkins:
+    post:
+      operationId: checkInWithQr
+      summary: A14 · Validar QR y registrar asistencia
+      description: Orden de validación en el documento de diseño, sección 5.
+      tags: [Acceso]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, talk_id]
+              properties:
+                token: { type: string, maxLength: 512 }
+                talk_id: { type: integer, minimum: 1 }
+      responses:
+        '201':
+          description: Asistencia registrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CheckInResult' }
+        '200':
+          description: Ya estaba registrada; no se crea otra fila.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CheckInResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422':
+          description: Token rechazado.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              examples:
+                expired:
+                  value: { error: { code: EXPIRED, message: El código ha caducado. Pide al asistente que lo actualice., fields: null } }
+                invalid:
+                  value: { error: { code: INVALID, message: El código no es válido., fields: null } }
+                wrongTalk:
+                  value: { error: { code: WRONG_TALK, message: El código corresponde a otra charla., fields: null } }
+                notActive:
+                  value: { error: { code: NOT_ACTIVE, message: La reserva no está confirmada., fields: null } }
+
+  /staff/talks/{talkId}/reservations:
+    get:
+      operationId: searchTalkReservations
+      summary: A15 · Buscar reservas de una charla (registro manual)
+      tags: [Acceso]
+      parameters:
+        - $ref: '#/components/parameters/TalkId'
+        - name: q
+          in: query
+          required: true
+          description: Nombre o referencia, mínimo 2 caracteres.
+          schema: { type: string, minLength: 2, maxLength: 100 }
+      responses:
+        '200':
+          description: Coincidencias (máx. 20).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    maxItems: 20
+                    items: { $ref: '#/components/schemas/StaffReservationRow' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /checkins/manual:
+    post:
+      operationId: checkInManually
+      summary: A16 · Registro manual de asistencia
+      tags: [Acceso]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reservation_id, reason]
+              properties:
+                reservation_id: { type: integer, minimum: 1 }
+                reason: { type: string, minLength: 3, maxLength: 255 }
+            example: { reservation_id: 1842, reason: Móvil sin batería; identidad comprobada con DNI }
+      responses:
+        '201':
+          description: Asistencia registrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CheckInResult' }
+        '200':
+          description: Ya estaba registrada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/CheckInResult' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/talks:
+    get:
+      operationId: adminListTalks
+      summary: A17 · Listar charlas (todas)
+      tags: [Administración]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/TalkStatus' }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Charlas con ocupación.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/TalkDetail' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: adminCreateTalk
+      summary: A18 · Crear charla
+      tags: [Administración]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TalkInput' }
+      responses:
+        '201':
+          description: Charla creada en estado draft.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TalkDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/talks/{talkId}:
+    put:
+      operationId: adminUpdateTalk
+      summary: A19 · Editar charla
+      tags: [Administración]
+      parameters:
+        - $ref: '#/components/parameters/TalkId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TalkInput' }
+      responses:
+        '200':
+          description: Charla actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TalkDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/talks/{talkId}/status:
+    patch:
+      operationId: adminChangeTalkStatus
+      summary: A20 · Publicar, despublicar o cancelar charla
+      tags: [Administración]
+      parameters:
+        - $ref: '#/components/parameters/TalkId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/TalkStatus' }
+      responses:
+        '200':
+          description: Estado cambiado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/TalkDetail' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/speakers:
+    get:
+      operationId: adminListSpeakers
+      summary: A21 · Listar ponentes
+      tags: [Administración]
+      responses:
+        '200':
+          description: Ponentes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Speaker' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: adminCreateSpeaker
+      summary: A21 · Crear ponente
+      tags: [Administración]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SpeakerInput' }
+      responses:
+        '201':
+          description: Ponente creado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Speaker' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/speakers/{speakerId}:
+    parameters:
+      - name: speakerId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    put:
+      operationId: adminUpdateSpeaker
+      summary: A21 · Editar ponente
+      tags: [Administración]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SpeakerInput' }
+      responses:
+        '200':
+          description: Ponente actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Speaker' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      operationId: adminDeleteSpeaker
+      summary: A21 · Borrar ponente sin charlas
+      tags: [Administración]
+      responses:
+        '204': { description: Borrado. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HasTalks' }
+
+  /admin/rooms:
+    get:
+      operationId: adminListRooms
+      summary: A22 · Listar salas
+      tags: [Administración]
+      responses:
+        '200':
+          description: Salas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Room' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: adminCreateRoom
+      summary: A22 · Crear sala
+      tags: [Administración]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoomInput' }
+      responses:
+        '201':
+          description: Sala creada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Room' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/rooms/{roomId}:
+    parameters:
+      - name: roomId
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    put:
+      operationId: adminUpdateRoom
+      summary: A22 · Editar sala
+      tags: [Administración]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RoomInput' }
+      responses:
+        '200':
+          description: Sala actualizada.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Room' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+    delete:
+      operationId: adminDeleteRoom
+      summary: A22 · Borrar sala sin charlas
+      tags: [Administración]
+      responses:
+        '204': { description: Borrada. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HasTalks' }
+
+  /admin/reservations:
+    get:
+      operationId: adminListReservations
+      summary: A23 · Reservas con filtros
+      tags: [Administración]
+      parameters:
+        - name: talk_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [confirmed, cancelled, attended] }
+        - name: q
+          in: query
+          schema: { type: string, maxLength: 100 }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: 20 filas por página.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/AdminReservationRow' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/attendances:
+    get:
+      operationId: adminListAttendances
+      summary: A24 · Asistencias registradas
+      tags: [Administración]
+      parameters:
+        - name: talk_id
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: method
+          in: query
+          schema: { type: string, enum: [qr, manual] }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Asistencias paginadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Attendance' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/notifications:
+    get:
+      operationId: adminListNotifications
+      summary: A25 · Notificaciones por estado
+      tags: [Administración]
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: '#/components/schemas/NotificationStatus' }
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: Notificaciones paginadas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Notification' }
+                  meta: { $ref: '#/components/schemas/PageMeta' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /admin/notifications/{notificationId}/retry:
+    post:
+      operationId: adminRetryNotification
+      summary: A26 · Reintentar un correo
+      tags: [Administración]
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '202':
+          description: Reintento encolado; la reserva no cambia.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Notification' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Ya enviada o en curso.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example: { error: { code: ALREADY_SENT, message: El correo ya se envió correctamente., fields: null } }
+
+  /admin/users/{userId}/role:
+    patch:
+      operationId: adminChangeRole
+      summary: A27 · Cambiar el rol de un usuario
+      tags: [Administración]
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role: { type: string, enum: [attendee, staff, admin] }
+      responses:
+        '200':
+          description: Rol cambiado.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/User' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+
+  /admin/stats:
+    get:
+      operationId: adminStats
+      summary: A28 · Indicadores del panel
+      tags: [Administración]
+      responses:
+        '200':
+          description: Indicadores agregados.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: object
+                    required: [talks, reservations_confirmed, attendances, notifications_failed, scans_rejected]
+                    properties:
+                      talks: { type: integer }
+                      reservations_confirmed: { type: integer }
+                      attendances: { type: integer }
+                      notifications_failed: { type: integer }
+                      scans_rejected: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /health:
+    get:
+      operationId: health
+      summary: A29 · Estado del servicio
+      tags: [Sistema]
+      security: []
+      responses:
+        '200':
+          description: Base de datos y cola operativas.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Alguna dependencia no responde.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sabitech_session
+      description: Cookie de sesión de Laravel (HttpOnly, Secure, SameSite=Lax) + cabecera X-XSRF-TOKEN.
+
+  parameters:
+    TalkId:
+      name: talkId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    ReservationId:
+      name: reservationId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+
+  responses:
+    Unauthenticated:
+      description: Sin sesión o sesión caducada.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: UNAUTHENTICATED, message: Tu sesión ha caducado. Vuelve a iniciar sesión., fields: null } }
+    Forbidden:
+      description: El rol no permite la operación.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: FORBIDDEN, message: No tienes permiso para esta operación., fields: null } }
+    NotFound:
+      description: No existe o no pertenece al usuario (no se distingue).
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: NOT_FOUND, message: No se ha encontrado el recurso., fields: null } }
+    ValidationError:
+      description: Datos de entrada no válidos.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: VALIDATION_FAILED, message: Revisa los campos marcados., fields: { email: [El email ya está registrado.] } } }
+    TooManyRequests:
+      description: Límite de peticiones superado.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: TOO_MANY_REQUESTS, message: Demasiados intentos. Espera un minuto., fields: null } }
+    HasTalks:
+      description: Tiene charlas asociadas; no se puede borrar.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example: { error: { code: HAS_TALKS, message: Tiene charlas asociadas., fields: null } }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, fields]
+          properties:
+            code:
+              type: string
+              enum: [UNAUTHENTICATED, FORBIDDEN, NOT_FOUND, METHOD_NOT_ALLOWED, VALIDATION_FAILED, TOO_MANY_REQUESTS,
+                     TALK_FULL, DUPLICATE, TALK_STARTED, OVERLAP, ALREADY_CANCELLED, ATTENDED,
+                     NOT_ACTIVE, OUTSIDE_WINDOW, EXPIRED, INVALID, WRONG_TALK,
+                     ALREADY_SENT, AFORO_BELOW_CONFIRMED, HAS_TALKS, SERVER_ERROR]
+            message: { type: string, description: 'Texto para mostrar al usuario, en español.' }
+            fields:
+              description: Errores por campo (solo en VALIDATION_FAILED).
+              oneOf:
+                - type: 'null'
+                - type: object
+                  additionalProperties:
+                    type: array
+                    items: { type: string }
+
+    PageMeta:
+      type: object
+      required: [current_page, per_page, total, last_page]
+      properties:
+        current_page: { type: integer }
+        per_page: { type: integer }
+        total: { type: integer }
+        last_page: { type: integer }
+
+    TalkStatus:
+      type: string
+      enum: [draft, published, cancelled]
+
+    Speaker:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        affiliation: { type: [string, 'null'] }
+        bio: { type: [string, 'null'] }
+        photo_url: { type: [string, 'null'], format: uri }
+        photo_alt: { type: [string, 'null'] }
+
+    SpeakerInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        affiliation: { type: [string, 'null'], maxLength: 160 }
+        bio: { type: [string, 'null'], maxLength: 2000 }
+        photo_alt: { type: [string, 'null'], maxLength: 255 }
+
+    Room:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        location_details: { type: [string, 'null'] }
+
+    RoomInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        location_details: { type: [string, 'null'], maxLength: 255 }
+
+    TalkSummary:
+      type: object
+      required: [id, title, speaker, room, starts_at, ends_at, capacity, available_seats, status]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        speaker: { $ref: '#/components/schemas/Speaker' }
+        room: { $ref: '#/components/schemas/Room' }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        capacity: { type: integer, minimum: 1 }
+        available_seats: { type: integer, minimum: 0, description: capacity − reservas confirmadas. }
+        status: { $ref: '#/components/schemas/TalkStatus' }
+      example:
+        id: 7
+        title: Accesibilidad web más allá del contraste
+        speaker: { id: 3, name: Marta Ibáñez, affiliation: Estudio Faro, bio: null, photo_url: null, photo_alt: null }
+        room: { id: 1, name: Aula Magna, location_details: Planta baja }
+        starts_at: '2027-02-24T10:00:00+01:00'
+        ends_at: '2027-02-24T10:45:00+01:00'
+        capacity: 40
+        available_seats: 12
+        status: published
+
+    TalkDetail:
+      allOf:
+        - $ref: '#/components/schemas/TalkSummary'
+        - type: object
+          required: [description]
+          properties:
+            description: { type: string }
+            reservations_confirmed: { type: integer, description: Solo en rutas de administración. }
+            attendances: { type: integer, description: Solo en rutas de administración. }
+
+    TalkInput:
+      type: object
+      required: [title, description, speaker_id, room_id, starts_at, ends_at, capacity]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 160 }
+        description: { type: string, minLength: 10, maxLength: 5000 }
+        speaker_id: { type: integer, minimum: 1 }
+        room_id: { type: integer, minimum: 1 }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time, description: Posterior a starts_at. }
+        capacity: { type: integer, minimum: 1, maximum: 1000, description: No inferior a las reservas confirmadas (RN-12). }
+
+    User:
+      type: object
+      required: [id, name, email, role]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [attendee, staff, admin] }
+
+    NotificationStatus:
+      type: string
+      enum: [pending, sending, sent, failed]
+
+    Reservation:
+      type: object
+      required: [id, reference, status, display_status, confirmed_at, talk, email_status]
+      properties:
+        id: { type: integer }
+        reference: { type: string, pattern: '^SBT-[A-HJKMNP-Z2-9]{6}$' }
+        status: { type: string, enum: [confirmed, cancelled] }
+        display_status:
+          type: string
+          enum: [confirmed, cancelled, attended]
+          description: attended = confirmada con asistencia registrada (calculado).
+        confirmed_at: { type: string, format: date-time }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+        attended_at: { type: [string, 'null'], format: date-time }
+        email_status: { $ref: '#/components/schemas/NotificationStatus' }
+        talk: { $ref: '#/components/schemas/TalkSummary' }
+      example:
+        id: 1842
+        reference: SBT-7K3Q9X
+        status: confirmed
+        display_status: confirmed
+        confirmed_at: '2027-02-10T18:22:04+01:00'
+        cancelled_at: null
+        attended_at: null
+        email_status: sent
+        talk:
+          id: 7
+          title: Accesibilidad web más allá del contraste
+          speaker: { id: 3, name: Marta Ibáñez, affiliation: Estudio Faro, bio: null, photo_url: null, photo_alt: null }
+          room: { id: 1, name: Aula Magna, location_details: Planta baja }
+          starts_at: '2027-02-24T10:00:00+01:00'
+          ends_at: '2027-02-24T10:45:00+01:00'
+          capacity: 40
+          available_seats: 11
+          status: published
+
+    Credential:
+      type: object
+      required: [token, issued_at, expires_at, server_time]
+      properties:
+        token: { type: string, description: 'base64url(payload).base64url(HMAC-SHA256)' }
+        issued_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, description: issued_at + 30 s. }
+        server_time: { type: string, format: date-time, description: Hora del servidor para calcular el desfase. }
+
+    StaffTalk:
+      type: object
+      required: [id, title, room, starts_at, ends_at, reservations_confirmed, attendances]
+      properties:
+        id: { type: integer }
+        title: { type: string }
+        room: { $ref: '#/components/schemas/Room' }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        reservations_confirmed: { type: integer }
+        attendances: { type: integer }
+
+    CheckInResult:
+      type: object
+      required: [result, attendee_name, talk_title, validated_at, method]
+      properties:
+        result: { type: string, enum: [REGISTERED, ALREADY_REGISTERED] }
+        attendee_name: { type: string }
+        reservation_reference: { type: string }
+        talk_title: { type: string }
+        validated_at: { type: string, format: date-time, description: Hora del registro original si ya existía. }
+        method: { type: string, enum: [qr, manual] }
+
+    StaffReservationRow:
+      type: object
+      required: [reservation_id, reference, attendee_name, attended]
+      properties:
+        reservation_id: { type: integer }
+        reference: { type: string }
+        attendee_name: { type: string }
+        attended: { type: boolean }
+
+    AdminReservationRow:
+      type: object
+      required: [id, reference, attendee, talk_id, talk_title, display_status, email_status, confirmed_at]
+      properties:
+        id: { type: integer }
+        reference: { type: string }
+        attendee:
+          type: object
+          required: [id, name, email]
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            email: { type: string, format: email }
+        talk_id: { type: integer }
+        talk_title: { type: string }
+        display_status: { type: string, enum: [confirmed, cancelled, attended] }
+        email_status: { $ref: '#/components/schemas/NotificationStatus' }
+        confirmed_at: { type: string, format: date-time }
+        cancelled_at: { type: [string, 'null'], format: date-time }
+
+    Attendance:
+      type: object
+      required: [id, reservation_reference, attendee_name, talk_id, talk_title, method, validated_by, validated_at]
+      properties:
+        id: { type: integer }
+        reservation_reference: { type: string }
+        attendee_name: { type: string }
+        talk_id: { type: integer }
+        talk_title: { type: string }
+        method: { type: string, enum: [qr, manual] }
+        manual_reason: { type: [string, 'null'] }
+        validated_by: { type: string, description: Nombre del staff. }
+        validated_at: { type: string, format: date-time }
+
+    Notification:
+      type: object
+      required: [id, reservation_reference, recipient, status, attempts]
+      properties:
+        id: { type: integer }
+        reservation_reference: { type: string }
+        recipient: { type: string, format: email }
+        status: { $ref: '#/components/schemas/NotificationStatus' }
+        attempts: { type: integer }
+        last_error: { type: [string, 'null'] }
+        last_attempt_at: { type: [string, 'null'], format: date-time }
+        sent_at: { type: [string, 'null'], format: date-time }
+
+    Health:
+      type: object
+      required: [status, database, queue, time]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        database: { type: string, enum: [ok, error] }
+        queue: { type: string, enum: [ok, error] }
+        time: { type: string, format: date-time }

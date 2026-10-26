@@ -1,0 +1,67 @@
+# SABITECH WEB · Nginx del contenedor front.
+# ${SERVER_NAME} lo sustituye la imagen oficial de Nginx al arrancar (variable de compose.yaml).
+# Las demás variables ($uri, $host…) son de Nginx y no se tocan.
+
+# HTTP solo redirige a HTTPS.
+server {
+    listen 80;
+    server_name ${SERVER_NAME} localhost;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name ${SERVER_NAME} localhost;
+
+    # Certificados de mkcert montados desde ./certs (fuera de Git).
+    ssl_certificate     /etc/nginx/certs/sabitech.pem;
+    ssl_certificate_key /etc/nginx/certs/sabitech-key.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    root /usr/share/nginx/html;
+    index index.html;
+    server_tokens off;
+    client_max_body_size 8m;
+
+    # Cabeceras de seguridad. La cámara solo se permite a la propia web (escáner QR).
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(self), microphone=(), geolocation=()" always;
+    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # API y CSRF de Sanctum → PHP-FPM del contenedor back.
+    # Nginx no necesita los ficheros PHP: solo indica a FPM qué script ejecutar.
+    location ~ ^/(api|sanctum)/ {
+        include fastcgi_params;
+        fastcgi_pass back:9000;
+        fastcgi_param SCRIPT_FILENAME /var/www/html/public/index.php;
+        fastcgi_param SCRIPT_NAME /index.php;
+        fastcgi_param HTTPS on;
+        fastcgi_param HTTP_X_FORWARDED_PROTO https;
+        fastcgi_read_timeout 30s;
+    }
+
+    # Recursos con hash en el nombre: caché larga.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    # SPA: cualquier ruta del cliente devuelve index.html (sin caché, para recibir siempre la última versión).
+    location / {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(self), microphone=(), geolocation=()" always;
+        add_header Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -1,0 +1,15 @@
+# Valores de prueba conocidos y públicos (no son secretos): clave de aplicación de los
+# tests, contraseñas de la base de datos de CI y cuentas ficticias de laboratorio.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Valores de prueba documentados"
+paths = [
+  '''backend/phpunit\.xml''',
+  '''\.github/workflows/ci\.yml''',
+]
+regexes = [
+  '''base64:A{43}=''',
+  '''local-test-only''',
+]

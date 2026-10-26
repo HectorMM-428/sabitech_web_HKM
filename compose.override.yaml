@@ -1,0 +1,35 @@
+# SABITECH WEB · ajustes SOLO para desarrollo.
+# `docker compose up` lee este fichero automáticamente junto a compose.yaml.
+# La demo lo excluye:  docker compose -f compose.yaml up -d --build
+#
+# Siguen siendo tres contenedores, pero:
+#   back   servidor de Laravel (artisan serve :8000) con el código montado
+#   front  servidor de Vite (:5173) con recarga en caliente; reenvía /api y /sanctum a back
+#   db     igual que en la demo
+
+services:
+  back:
+    build:
+      target: dev
+    volumes:
+      - ./backend:/var/www/html
+    environment:
+      APP_ENV: local
+      APP_DEBUG: "true"
+      # En desarrollo se entra por http://localhost:5173: la cookie no puede exigir HTTPS.
+      SESSION_SECURE_COOKIE: "false"
+      SANCTUM_STATEFUL_DOMAINS: localhost:5173
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@fsockopen('127.0.0.1', 8000) ? 0 : 1);"]
+      start_period: 120s
+
+  front:
+    build:
+      target: dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      VITE_DEV_API_TARGET: http://back:8000
+    ports: !override
+      - "5173:5173"
