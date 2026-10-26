@@ -12,4 +12,8 @@ paths = [
 regexes = [
   '''base64:A{43}=''',
   '''local-test-only''',
+  # Contraseña de las cuentas ficticias que crean las pruebas automáticas (RefreshDatabase).
+  '''Clave-segura-2026''',
+  # Nombre de variable de configuración, no un secreto (duración del QR en segundos).
+  '''QR_TTL_SECONDS=\d+''',
 ]
