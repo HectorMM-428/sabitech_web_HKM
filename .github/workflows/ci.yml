@@ -3,9 +3,9 @@
 name: CI
 
 on:
+  # Todas las ramas del repositorio: cada subida se comprueba, también antes de abrir la PR.
   push:
-    branches: [main]
-  pull_request:
+    branches: ['**']
   workflow_dispatch:
 
 permissions:

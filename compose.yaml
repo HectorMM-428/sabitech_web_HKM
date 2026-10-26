@@ -26,6 +26,8 @@ services:
       - --collation-server=utf8mb4_0900_ai_ci
     volumes:
       - db-data:/var/lib/mysql
+      # Solo en el primer arranque: crea la base sabitech_test para las pruebas.
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
       interval: 5s

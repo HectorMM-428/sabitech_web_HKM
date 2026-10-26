@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
- * @property int|null $confirmed_reservations_count  Disponible tras withAvailableSeats().
+ * @property int|null $confirmed_reservations_count Disponible tras withAvailableSeats().
  */
 #[Fillable(['title', 'description', 'speaker_id', 'room_id', 'starts_at', 'ends_at', 'capacity', 'status'])]
 class Talk extends Model
@@ -59,7 +59,7 @@ class Talk extends Model
      * Cuenta las reservas confirmadas en la misma consulta (sin N+1).
      * Las plazas libres salen siempre de la base de datos, nunca de un contador editable (RN-02).
      *
-     * @param Builder<Talk> $query
+     * @param  Builder<Talk>  $query
      */
     public function scopeWithAvailableSeats(Builder $query): void
     {

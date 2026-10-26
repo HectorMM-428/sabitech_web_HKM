@@ -5,7 +5,7 @@
 set -e
 
 if [ -z "$APP_KEY" ]; then
-  echo "ERROR: falta APP_KEY en .env. Genérala con: docker compose run --rm back php artisan key:generate --show" >&2
+  echo 'ERROR: falta APP_KEY en .env. Genérala con: echo "base64:$(openssl rand -base64 32)"' >&2
   exit 1
 fi
 
